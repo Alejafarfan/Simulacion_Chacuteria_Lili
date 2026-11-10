@@ -1,0 +1,248 @@
+<!doctype html> 
+<html lang="es">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Charcutería Lili 3D</title>
+  <meta name="claude:viewport-fit-sides" content="cover">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap"
+    rel="stylesheet">
+  <script src="libs/three.min.js"></script>
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+
+<body>
+  <div class="app">
+    <div class="main">
+      <div class="stage3d" id="stage3d">
+        <canvas id="stage" role="img"
+          aria-label="Vista 3D de la charcutería: fila del mostrador con sus empleados y fila de la caja con un cajero"></canvas>
+        <div class="badge" id="badge" hidden></div>
+        <div class="camtools" id="camtools" role="group" aria-label="Cámara">
+          <button class="btn" type="button" data-cam="general" aria-pressed="true">General</button>
+          <button class="btn" type="button" data-cam="aerea" aria-pressed="false">Aérea</button>
+          <button class="btn" type="button" data-cam="mostrador" aria-pressed="false">Mostrador</button>
+          <button class="btn" type="button" data-cam="caja" aria-pressed="false">Caja</button>
+        </div>
+        <div class="hint" id="hint">Escribe los datos (o cárgalos de la base de datos) y dale a «Iniciar simulación».
+        </div>
+        <div class="nogl" id="nogl" hidden>No se pudo iniciar la vista 3D (el navegador necesita WebGL activado). Los
+          cálculos y la base de datos siguen funcionando.</div>
+      </div>
+      <div class="legend">
+        <span aria-hidden="true"><i style="background:#f0a030"></i>Esperando en fila</span>
+        <span aria-hidden="true"><i style="background:#3cb04a"></i>Con un empleado</span>
+        <span aria-hidden="true"><i style="background:#3a78d8"></i>En la caja</span>
+        <span aria-hidden="true"><i style="background:#999"></i>Ya pagó</span>
+        <span class="tip">Arrastra para girar · Shift + arrastrar para mover · rueda o pellizco para acercar</span>
+      </div>
+      <div class="controls">
+        <button class="btn" id="btnPausa" disabled>Pausa</button>
+        <button class="btn" id="btnReiniciar" disabled>Reiniciar</button>
+        <div class="speed">
+          <label for="velSlider">Velocidad</label>
+          <input type="range" id="velSlider" min="1" max="100" step="1" value="4">
+          <output id="velOut" for="velSlider">4</output>
+          <span class="note">min simulados por segundo</span>
+        </div>
+      </div>
+      <div class="unstable" id="unstable" role="status" hidden>Parámetros inestables (λ ≥ 3·μ1 o λ ≥ μ2): las filas
+        crecen sin límite y no existe solución teórica.</div>
+      <div class="metrics">
+        <section class="card m1">
+          <h2>Mostrador <small id="mmc">M/M/3</small></h2>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Teoría</th>
+                <th>Simulado</th>
+              </tr>
+            </thead>
+            <tbody id="tb1"></tbody>
+          </table>
+          <p class="now" id="now1"></p>
+        </section>
+        <section class="card m2">
+          <h2>Caja <small>M/M/1</small></h2>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Teoría</th>
+                <th>Simulado</th>
+              </tr>
+            </thead>
+            <tbody id="tb2"></tbody>
+          </table>
+          <p class="now" id="now2"></p>
+        </section>
+        <section class="card">
+          <h2>Sistema completo</h2>
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Teoría</th>
+                <th>Simulado</th>
+              </tr>
+            </thead>
+            <tbody id="tb3"></tbody>
+          </table>
+          <p class="now" id="now3"></p>
+        </section>
+      </div>
+
+      <section class="card dbcard" id="dbpanel">
+        <h2>Base de datos de observaciones <small>Charcutería Lili · observación directa, 6:00 a 7:00 p. m.</small></h2>
+        <p class="note" style="margin:0">Tiempos tomados en el mostrador y en la caja. Los cambios se guardan en este
+          navegador; con «Restablecer» vuelven los datos originales del proyecto.</p>
+        <div class="dbbar">
+          <div class="seg" id="segObs" role="group" aria-label="Observación"></div>
+          <div class="seg" id="segTabla" role="group" aria-label="Tabla">
+            <button type="button" class="chip" data-t="M" aria-pressed="true">Mostrador</button>
+            <button type="button" class="chip" data-t="C" aria-pressed="false">Caja</button>
+          </div>
+        </div>
+        <div class="stats" id="dbStats"></div>
+        <div class="dbscroll">
+          <table id="dbTabla">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <details class="add">
+          <summary>Agregar un registro</summary>
+          <form class="addform" id="formAdd" novalidate>
+            <label>Observación<select id="addObs"></select></label>
+            <label>Cliente<input id="addCl" inputmode="numeric" autocomplete="off" placeholder="21"></label>
+            <label>Llegada<input id="addLl" autocomplete="off" placeholder="6:15"></label>
+            <label id="lblSv">Servidor<select id="addSv">
+                <option>E1</option>
+                <option>E2</option>
+                <option>E3</option>
+              </select></label>
+            <label>Inicio<input id="addIni" autocomplete="off" placeholder="6:15"></label>
+            <label>Fin<input id="addFin" autocomplete="off" placeholder="6:20"></label>
+            <button type="submit" class="btn go">Agregar</button>
+          </form>
+          <div class="err" id="errAdd" role="alert" hidden></div>
+          <p class="note" style="margin:8px 0 0">El tiempo entre llegadas, el servicio y la espera se calculan solos a
+            partir de las horas (formato H:MM, ej. 6:15).</p>
+        </details>
+        <div class="row dbactions">
+          <button type="button" class="btn go" id="btnUsar">Usar estos datos en la simulación</button>
+          <button type="button" class="btn" id="btnExport">Exportar CSV</button>
+          <button type="button" class="btn" id="btnDelObs" hidden>Eliminar esta observación</button>
+          <button type="button" class="btn danger" id="btnReset">Restablecer datos originales</button>
+        </div>
+      </section>
+    </div>
+
+    <aside class="side panel">
+      <h1>Charcutería Lili</h1>
+      <p class="lede" id="lede">Colas en serie: tres empleados en el mostrador (M/M/3) y luego un cajero (M/M/1).</p>
+
+      <form class="block" id="form" novalidate style="border-top:0;padding-top:0">
+        <h2>Datos de entrada</h2>
+        <div class="field"><label for="inLleg">Tiempo entre llegadas (min)</label>
+          <input type="text" id="inLleg" inputmode="decimal" autocomplete="off" placeholder="ej. 2,442">
+        </div>
+        <div class="field alt"><label for="inLlegH">o: clientes que llegan por hora</label>
+          <input type="text" id="inLlegH" inputmode="decimal" autocomplete="off" placeholder="ej. 24,6">
+        </div>
+        <div class="field"><label for="inN">Empleados atendiendo en el mostrador</label>
+          <select id="inN">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+          </select>
+        </div>
+        <div class="field"><label for="inEmp">Servicio de cada empleado (min)</label>
+          <input type="text" id="inEmp" inputmode="decimal" autocomplete="off" placeholder="ej. 6,273">
+        </div>
+        <div class="field alt"><label for="inEmpH">o: clientes que atiende cada empleado por hora</label>
+          <input type="text" id="inEmpH" inputmode="decimal" autocomplete="off" placeholder="ej. 9,6">
+        </div>
+        <div class="field"><label for="inCaja">Servicio del cajero (min)</label>
+          <input type="text" id="inCaja" inputmode="decimal" autocomplete="off" placeholder="ej. 1,764">
+        </div>
+        <div class="field alt"><label for="inCajaH">o: clientes que atiende el cajero por hora</label>
+          <input type="text" id="inCajaH" inputmode="decimal" autocomplete="off" placeholder="ej. 34">
+        </div>
+        <p class="note" style="margin:0 0 10px">Cada dato se puede escribir como tiempo (min) o como cantidad de
+          clientes por hora: son equivalentes y se actualizan entre sí. Si la simulación está corriendo, al cambiar
+          cualquier valor se reinicia con los datos nuevos.</p>
+        <div class="fieldfull"><label for="inModo">Qué datos usa la simulación</label>
+          <select id="inModo">
+            <option value="exp">Llegadas y servicios exponenciales (teoría)</option>
+            <option value="emp">Servicios remuestreados de la base de datos</option>
+            <option value="traza">Reproducir una observación de la base de datos</option>
+          </select>
+        </div>
+        <div class="fieldfull" id="fObs" hidden><label for="inObs">Observación a reproducir</label>
+          <select id="inObs"></select>
+        </div>
+        <div class="row">
+          <button type="submit" class="btn go" id="btnIniciar">Iniciar simulación</button>
+          <button type="button" class="btn" id="btnMedidos">Cargar datos de la BD</button>
+        </div>
+        <div class="err" id="err" role="alert" hidden></div>
+        <p class="info" id="info">Se calcula λ = 1 / tiempo entre llegadas y μ = 1 / tiempo de servicio.</p>
+      </form>
+
+      <section class="block">
+        <h2>Personas en fila</h2>
+        <div class="chartkey">
+          <span><i style="border-color:var(--s1)"></i>Mostrador</span>
+          <span><i style="border-color:var(--s2)"></i>Caja</span>
+          <span><i class="d" style="border-color:var(--muted)"></i>Lq teórico</span>
+        </div>
+        <canvas id="chart" role="img"
+          aria-label="Gráfico de la longitud de las filas del mostrador y de la caja en los últimos 120 minutos simulados"></canvas>
+        <p class="note" style="margin:6px 0 0">Últimos 120 minutos simulados.</p>
+      </section>
+
+      <section class="block">
+        <h2>Registro de transacciones</h2>
+        <div class="tablewrap">
+          <table class="log">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Llegó</th>
+                <th>Fila 1</th>
+                <th>Fila 2</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="log">
+              <tr>
+                <td colspan="5" style="text-align:left;color:var(--muted)">Aún no ha pagado nadie.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note" style="margin:6px 0 0">Últimos 8 clientes que pagaron; tiempos en minutos.</p>
+      </section>
+
+      <section class="block note">
+        <p>No se modelan abandonos de la fila ni el tiempo de caminar entre puestos en las fórmulas, igual que en la
+          teoría; en la escena 3D los clientes caminan solo para que se vea el recorrido.</p>
+        <p>Con pocos minutos simulados los valores simulados varían; se acercan a los teóricos al dejar correr más
+          tiempo o subir la velocidad. Al reproducir una observación, la simulación termina cuando paga el último
+          cliente.</p>
+      </section>
+    </aside>
+  </div>
+
+  <script src="js/datos.js"></script>
+  <script src="js/utilidades.js"></script>
+  <script src="js/simulacion.js"></script>
+</body>
+
+</html>
